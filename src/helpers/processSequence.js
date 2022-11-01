@@ -14,38 +14,70 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import Api from '../tools/api';
+import {__, allPass, compose, gt, ifElse, lt, prop, tap, test} from "ramda";
 
- const api = new Api();
+const api = new Api();
+// геттеры
+const getLength = prop('length');
+const getResultFromObject = prop("result")
+const getNumberFromApi = num => api.get('https://api.tech/numbers/base', {from: 10, to: 2, number: num})
+const getAnimalFromApiById = id => api.get(`https://animals.tech/${id}`, {})
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+// предикаты
+const isNumberSymbols = test(/^[1-9][\d.]+$/i);
+const isValueLess10 = lt(__, 10);
+const isValueMore2 = gt(__, 2);
+const isValueValidNumber = allPass([
+  compose(isValueLess10, getLength),
+  compose(isValueMore2, getLength),
+  isNumberSymbols
+])
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+// вспомогательные функции
+const stringToNumber = str => Number(str)
+const roundNumber = num => Math.round(num)
+const numberPowBy2 = num => Math.pow(num, 2)
+const numberMod3 = num => num % 3
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
+  // tap для логирования
+  const tapLog = tap(writeLog)
+  // вывод ошибки
+  const setError = () => handleError(`ValidationError`)
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+  const getAnimalFromApi = id => {
+    getNumberFromApi(id)
+       .then(getResultFromObject)
+       .then(tapLog)
+       .then(getLength)
+       .then(tapLog)
+       .then(numberPowBy2)
+       .then(tapLog)
+       .then(numberMod3)
+       .then(tapLog)
+       .then(getAnimalFromApiById)
+       .then(getResultFromObject)
+       .then(handleSuccess)
+       .catch(handleError)
+       .catch(() => {})
+  }
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+  const getAnimal = compose(
+     getAnimalFromApi,
+     tapLog,
+     roundNumber,
+     stringToNumber
+  )
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+  const validateNumber = ifElse(
+     isValueValidNumber,
+     getAnimal,
+     setError
+  )
 
- export default processSequence;
+  const start = compose(validateNumber, tapLog)
+  start(value)
+}
+
+export default processSequence;
